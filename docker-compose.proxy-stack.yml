@@ -1,0 +1,85 @@
+# Resin + Aggregator Stack
+# Deploy the complete proxy infrastructure with:
+#   docker compose -f docker-compose.proxy-stack.yml up -d
+
+services:
+  # ─── Resin: Proxy Gateway with Sticky Sessions ───
+  resin:
+    image: ghcr.io/resinat/resin:latest
+    container_name: nirvana-resin
+    restart: unless-stopped
+    ports:
+      - "2260:2260"   # HTTP Proxy port
+      - "2261:2261"   # Web UI + API
+    environment:
+      - RESIN_PROXY_TOKEN=${RESIN_PROXY_TOKEN:-nirvana-secret}
+      - RESIN_AUTH_VERSION=V1
+    volumes:
+      - resin-data:/app/data
+    networks:
+      - proxy-net
+
+  # ─── Aggregator: Free Proxy Node Scraper ───
+  # Run periodically to refresh the subscription
+  aggregator:
+    build:
+      context: ../aggregator
+      dockerfile: Dockerfile
+    container_name: nirvana-aggregator
+    restart: "no"  # Run once, then use cron or manual trigger
+    environment:
+      - PUSH_TOKEN=${GITHUB_GIST_TOKEN:-}
+    volumes:
+      - aggregator-output:/app/output
+    networks:
+      - proxy-net
+    # After scraping, the output subscription URLs/files are available
+    # Import them into Resin via its API
+
+  # ─── WARP Gateway: Free Cloudflare IPs ───
+  warp-1:
+    image: caomingjun/warp
+    container_name: nirvana-warp-1
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    ports:
+      - "1080:1080"   # SOCKS5 proxy
+    networks:
+      - proxy-net
+
+  warp-2:
+    image: caomingjun/warp
+    container_name: nirvana-warp-2
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    ports:
+      - "1081:1080"   # SOCKS5 proxy
+    networks:
+      - proxy-net
+
+  warp-3:
+    image: caomingjun/warp
+    container_name: nirvana-warp-3
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    ports:
+      - "1082:1080"   # SOCKS5 proxy
+    networks:
+      - proxy-net
+
+volumes:
+  resin-data:
+  aggregator-output:
+
+networks:
+  proxy-net:
+    driver: bridge

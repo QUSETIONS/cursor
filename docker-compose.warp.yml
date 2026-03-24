@@ -1,0 +1,243 @@
+version: '3.8'
+
+services:
+  warp-node-1:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-1
+    ports:
+      - "9001:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-2:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-2
+    ports:
+      - "9002:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-3:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-3
+    ports:
+      - "9003:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-4:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-4
+    ports:
+      - "9004:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-5:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-5
+    ports:
+      - "9005:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-6:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-6
+    ports:
+      - "9006:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-7:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-7
+    ports:
+      - "9007:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-8:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-8
+    ports:
+      - "9008:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-9:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-9
+    ports:
+      - "9009:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-10:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-10
+    ports:
+      - "9010:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-11:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-11
+    ports:
+      - "9011:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-12:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-12
+    ports:
+      - "9012:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-13:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-13
+    ports:
+      - "9013:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-14:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-14
+    ports:
+      - "9014:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-15:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-15
+    ports:
+      - "9015:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-16:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-16
+    ports:
+      - "9016:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-17:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-17
+    ports:
+      - "9017:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-18:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-18
+    ports:
+      - "9018:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-19:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-19
+    ports:
+      - "9019:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  warp-node-20:
+    image: monius/docker-warp-socks:latest
+    container_name: warp-node-20
+    ports:
+      - "9020:1080"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+

@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  nirvana-engine:
+    build: .
+    container_name: nirvana-engine
+    volumes:
+      # Data persistence across container restarts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - HEADLESS=true
+      - CONCURRENCY_LIMIT=3
+    ports:
+      # Expose ApiGateway
+      - "18080:18080"
+      # Forward internal port if a web server or IPC is added later
+      - "3000:3000"
+    restart: unless-stopped

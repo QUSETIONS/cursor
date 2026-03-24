@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # ─── Scalable Registration Worker ───
+  # Usage: docker compose -f docker-compose.farm.yml up --scale worker=50 -d
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      # ─── Catch-All Email Configuration ───
+      - CATCH_ALL_DOMAIN=your-domain.xyz
+      - IMAP_HOST=imap.gmail.com
+      - IMAP_PORT=993
+      - IMAP_USER=your-master@gmail.com
+      - IMAP_PASS=your-google-app-password
+      # ─── Target Platform ───
+      - TARGET_PLATFORM=kiro
+      # ─── Concurrency per container ───
+      - WORKER_CONCURRENCY=5
+      # ─── Proxy Pool API ───
+      - PROXY_POOL_URL=http://proxy-pool-api:8000
+      # ─── CAPTCHA Solver ───
+      - YESCAPTCHA_KEY=your_key_here
+      # ─── Virtual Credit Card (Optional) ───
+      - VCC_NUMBER=
+      - VCC_EXP_M=
+      - VCC_EXP_Y=
+      - VCC_CVC=
+      - VCC_NAME=
+      - VCC_ZIP=
+      # ─── Commercial Proxy Providers (Optional) ───
+      - IPROYAL_API_KEY=
+      - PROXYCHEAP_API_KEY=
+      - WEBSHARE_API_KEY=
+      - BRIGHTDATA_API_KEY=
+      # ─── WARP Matrix ───
+      - WARP_ENABLED=false
+      - WARP_HOST=warp-gateway
+      - WARP_BASE_PORT=9001
+      - WARP_NODE_COUNT=10
+    restart: unless-stopped
+    security_opt:
+      - seccomp=unconfined
+    shm_size: 1gb
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # ─── Cloudflare WARP SOCKS5 Gateway (Optional) ───
+  warp-gateway:
+    image: monius/docker-warp-socks:latest
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "9001-9010:1080"
+    deploy:
+      replicas: 10

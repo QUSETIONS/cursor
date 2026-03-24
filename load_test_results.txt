@@ -1,0 +1,9 @@
+{
+  "concurrency": 15,
+  "successes": 0,
+  "firstError": {
+    "success": false,
+    "dt": 23,
+    "err": "fetch failed"
+  }
+}

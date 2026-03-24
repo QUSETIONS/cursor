@@ -1,0 +1,149 @@
+# ═══════════════════════════════════════════════════════════════════
+# Cloudflare WARP Proxy Matrix v2 — Using native WARP CLI
+# Image: caomingjun/warp (more stable, uses official WARP client)
+# Each container exposes SOCKS5 on a unique port (9001-9010)
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+  warp-node-1:
+    image: caomingjun/warp:latest
+    container_name: warp-node-1
+    restart: unless-stopped
+    ports:
+      - "9001:1080"
+    environment:
+      - WARP_SLEEP=2
+      - WARP_LICENSE_KEY=
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-1:/var/lib/cloudflare-warp
+
+  warp-node-2:
+    image: caomingjun/warp:latest
+    container_name: warp-node-2
+    restart: unless-stopped
+    ports:
+      - "9002:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-2:/var/lib/cloudflare-warp
+
+  warp-node-3:
+    image: caomingjun/warp:latest
+    container_name: warp-node-3
+    restart: unless-stopped
+    ports:
+      - "9003:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-3:/var/lib/cloudflare-warp
+
+  warp-node-4:
+    image: caomingjun/warp:latest
+    container_name: warp-node-4
+    restart: unless-stopped
+    ports:
+      - "9004:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-4:/var/lib/cloudflare-warp
+
+  warp-node-5:
+    image: caomingjun/warp:latest
+    container_name: warp-node-5
+    restart: unless-stopped
+    ports:
+      - "9005:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-5:/var/lib/cloudflare-warp
+
+  warp-node-6:
+    image: caomingjun/warp:latest
+    container_name: warp-node-6
+    restart: unless-stopped
+    ports:
+      - "9006:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-6:/var/lib/cloudflare-warp
+
+  warp-node-7:
+    image: caomingjun/warp:latest
+    container_name: warp-node-7
+    restart: unless-stopped
+    ports:
+      - "9007:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-7:/var/lib/cloudflare-warp
+
+  warp-node-8:
+    image: caomingjun/warp:latest
+    container_name: warp-node-8
+    restart: unless-stopped
+    ports:
+      - "9008:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-8:/var/lib/cloudflare-warp
+
+  warp-node-9:
+    image: caomingjun/warp:latest
+    container_name: warp-node-9
+    restart: unless-stopped
+    ports:
+      - "9009:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-9:/var/lib/cloudflare-warp
+
+  warp-node-10:
+    image: caomingjun/warp:latest
+    container_name: warp-node-10
+    restart: unless-stopped
+    ports:
+      - "9010:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - warp-data-10:/var/lib/cloudflare-warp
+
+volumes:
+  warp-data-1:
+  warp-data-2:
+  warp-data-3:
+  warp-data-4:
+  warp-data-5:
+  warp-data-6:
+  warp-data-7:
+  warp-data-8:
+  warp-data-9:
+  warp-data-10:
