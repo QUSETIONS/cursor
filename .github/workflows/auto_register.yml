@@ -33,14 +33,12 @@ jobs:
         run: |
           # Use xvfb-run to provide a virtual frame buffer for Puppeteer
           # This allows full headless rendering without GUI limitations
-          xvfb-run -a npx tsx scripts/auto_register.ts
+          xvfb-run -a npx tsx scripts/github_actions_register.ts
           
       - name: Archive Generated Cursor Tokens & Accounts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cursor-identities
-          path: |
-            data/accounts.json
-            data/tokens/*.txt
+          name: cursor-tokens
+          path: data/
           retention-days: 7
