@@ -1,0 +1,46 @@
+name: Autonomous Cursor Registration Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs every 6 hours automatically (optional)
+    - cron: '0 */6 * * *'
+
+jobs:
+  register-cursor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          
+      - name: Install Puppeteer Chromium Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgbm-dev xvfb x11-xkb-utils xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic x11-apps
+
+      - name: Run Headless Registration Engine (IPv6 Dual-Stack Node)
+        run: |
+          # Use xvfb-run to provide a virtual frame buffer for Puppeteer
+          # This allows full headless rendering without GUI limitations
+          xvfb-run -a npx tsx scripts/auto_register.ts
+          
+      - name: Archive Generated Cursor Tokens & Accounts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cursor-identities
+          path: |
+            data/accounts.json
+            data/tokens/*.txt
+          retention-days: 7
