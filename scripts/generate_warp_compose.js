@@ -10,7 +10,7 @@ for (let i = 0; i < NUM_INSTANCES; i++) {
   const port = START_PORT + i;
   
   composeContent += `  ${nodeName}:
-    image: monius/docker-warp-socks:latest
+    image: cmj2002/warp:latest
     container_name: ${nodeName}
     ports:
       - "${port}:1080"

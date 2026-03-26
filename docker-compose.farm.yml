@@ -9,11 +9,11 @@ services:
       dockerfile: Dockerfile.worker
     environment:
       # ─── Catch-All Email Configuration ───
-      - CATCH_ALL_DOMAIN=your-domain.xyz
+      - CATCH_ALL_DOMAIN=nirvana-farm-2026.cyou
       - IMAP_HOST=imap.gmail.com
       - IMAP_PORT=993
-      - IMAP_USER=your-master@gmail.com
-      - IMAP_PASS=your-google-app-password
+      - IMAP_USER=${IMAP_USER}
+      - IMAP_PASS=${IMAP_PASS}
       # ─── Target Platform ───
       - TARGET_PLATFORM=kiro
       # ─── Concurrency per container ───
