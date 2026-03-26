@@ -1,8 +1,35 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 dist-electron/
 release/
-.gemini/
+
+# Environment & secrets
 .env
+.env.*
+
+# Binary proxy tools (download separately)
+warp-plus-bin/
+wireproxy-bin/
+
+# Browser extensions (download separately)
+assets/capsolver_ext/
+
+# Runtime data & accounts
+data/
+
+# OS artifacts
 .DS_Store
+Thumbs.db
+
+# Logs & debug output
 *.log
+*.txt
+!README.txt
+
+# IDE & agent
+.gemini/
+.vscode/
+.idea/

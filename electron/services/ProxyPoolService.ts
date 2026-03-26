@@ -10,6 +10,7 @@
  */
 
 import { createLogger } from '../utils/Logger';
+import { StorageService } from './StorageService';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -260,9 +261,14 @@ export class ProxyPoolService {
   private sources: ProxySource[] = [];
   private fastLane: ProxyEntry[] = [];
   private log = createLogger('ProxyPool');
+  
+  // Storage logic
+  private activeLeases: Map<string, ProxyEntry> = new Map();
+  private historicalScores: Record<string, number> = {};
 
   constructor(config?: Partial<ProxyPoolConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.historicalScores = StorageService.loadProxyScores();
   }
 
   // ─── Source Management ───
@@ -342,11 +348,12 @@ export class ProxyPoolService {
 
   // ─── CRUD ───
 
-  addProxy(entry: Omit<ProxyEntry, 'id' | 'failCount' | 'successCount' | 'isHealthy' | 'qualityScore'>): ProxyEntry {
+  addProxy(entry: Omit<ProxyEntry, 'id' | 'failCount' | 'successCount' | 'isHealthy'>): ProxyEntry {
     const id = `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const proxy: ProxyEntry = {
       ...entry, id,
-      failCount: 0, successCount: 0, isHealthy: true, qualityScore: 50,
+      failCount: 0, successCount: 0, isHealthy: true, 
+      qualityScore: entry.qualityScore ?? 50,
       enabled: entry.enabled !== undefined ? entry.enabled : true,
     };
     this.proxies.set(id, proxy);
@@ -372,7 +379,18 @@ export class ProxyPoolService {
       if (!parsed) { skipped++; continue; }
       const exists = Array.from(this.proxies.values()).some(p => p.host === parsed.host && p.port === parsed.port);
       if (exists) { skipped++; continue; }
-      this.addProxy({ ...parsed, source: sourceName, enabled: true, activeConnections: 0, lastUsedAt: 0 });
+      
+      const key = `${parsed.host}:${parsed.port}`;
+      const savedScore = this.historicalScores[key];
+      
+      this.addProxy({ 
+        ...parsed, 
+        source: sourceName, 
+        enabled: true, 
+        activeConnections: 0, 
+        lastUsedAt: 0,
+        qualityScore: savedScore !== undefined ? savedScore : 50 
+      });
       imported++;
     }
     return { imported, skipped };
@@ -415,48 +433,84 @@ export class ProxyPoolService {
   }
 
   /**
-   * Get an exclusive proxy route for a registration task.
-   * Ensures the IP is not concurrently used by another task.
+   * Request a leased proxy pinned to a specific task.
+   * Prioritizes Subscription sources (sub:*) and WARP over Free sources.
    */
-  getStrictRoute(): ProxyEntry | null {
-    const available = Array.from(this.proxies.values()).filter(p => p.enabled && p.isHealthy);
+  leaseProxy(taskId: string): ProxyEntry | null {
+    if (this.activeLeases.has(taskId)) {
+      return this.activeLeases.get(taskId)!;
+    }
+
+    const available = Array.from(this.proxies.values()).filter(p => p.enabled && p.isHealthy && p.activeConnections === 0);
     if (available.length === 0) return null;
 
-    // Prefer proxies with 0 active connections and not used in the last 30 seconds
+    // Prioritize Subscription nodes, then WARP (ipv6Capable), then rest
     const now = Date.now();
-    let candidates = available.filter(p => p.activeConnections === 0 && (now - p.lastUsedAt) > 30000);
-    
-    // If none are fully cooled down, just pick ones with 0 connections
-    if (candidates.length === 0) {
-      candidates = available.filter(p => p.activeConnections === 0);
-    }
+    let candidates = available.filter(p => (now - p.lastUsedAt) > 30000);
+    if (candidates.length === 0) candidates = available;
 
-    if (candidates.length === 0) return null;
+    // Boost scores temporarily for priority sorting
+    const sorted = candidates.sort((a, b) => {
+      let scoreA = a.qualityScore;
+      let scoreB = b.qualityScore;
 
-    // ★ IPv6 Priority: Prefer IPv6-capable proxies (WARP) over IPv4-only
-    const ipv6Candidates = candidates.filter(p => p.ipv6Capable);
-    const pool = ipv6Candidates.length > 0 ? ipv6Candidates : candidates;
-    if (ipv6Candidates.length > 0) {
-      this.log.debug(`Using IPv6-capable proxy (${ipv6Candidates.length} available)`);
-    }
+      // Local system proxy is always preferred
+      if (a.source === 'local-mihomo') scoreA += 1000;
+      else if (a.ipv6Capable) scoreA += 500; // WARP nodes preferred next
+      else if (a.source?.startsWith('sub:')) scoreA += 200; // Then subscriptions
+      
+      // Local system proxy is always preferred
+      if (b.source === 'local-mihomo') scoreB += 1000;
+      else if (b.ipv6Capable) scoreB += 500; // WARP nodes preferred next
+      else if (b.source?.startsWith('sub:')) scoreB += 200; // Then subscriptions
 
-    // Pick the best one from candidates
-    const selected = pool.sort((a, b) => b.qualityScore - a.qualityScore)[0];
-    
-    // Mark as active
+      return scoreB - scoreA;
+    });
+
+    const selected = sorted[0];
     selected.activeConnections++;
     selected.lastUsedAt = Date.now();
+    this.activeLeases.set(taskId, selected);
     return selected;
   }
 
   /**
-   * Release an exclusive proxy route after a task finishes.
+   * Release a leased proxy and update its quality score based on task success.
    */
-  releaseRoute(id: string): void {
-    const p = this.proxies.get(id);
-    if (p && p.activeConnections > 0) {
-      p.activeConnections--;
+  releaseProxy(taskId: string, success: boolean, reason?: string): void {
+    const proxy = this.activeLeases.get(taskId);
+    if (!proxy) return;
+    
+    this.activeLeases.delete(taskId);
+    if (proxy.activeConnections > 0) proxy.activeConnections--;
+
+    if (success) {
+      proxy.qualityScore = Math.min(100, proxy.qualityScore + 10);
+      proxy.successCount++;
+      proxy.failCount = 0;
+    } else {
+      proxy.failCount++;
+      // Penalize heavily for IP blocks, lightly for timeouts
+      const penalty = reason === 'ip_blocked' ? 30 : 10;
+      proxy.qualityScore = Math.max(0, proxy.qualityScore - penalty);
+      
+      if (proxy.failCount >= this.config.maxFailBeforeDisable) {
+        proxy.isHealthy = false;
+        this.log.warn(`Leased proxy disabled: ${proxy.host}:${proxy.port} (${reason})`);
+      }
     }
+
+    // Persist scores
+    this.saveDetailedScores();
+  }
+
+  private saveDetailedScores(): void {
+    const scores: Record<string, number> = {};
+    for (const p of this.proxies.values()) {
+      scores[`${p.host}:${p.port}`] = p.qualityScore;
+    }
+    this.historicalScores = scores;
+    StorageService.saveProxyScores(scores);
   }
 
   /** Get best proxy from FastLane (Top-N lowest latency + highest quality) */
@@ -504,17 +558,25 @@ export class ProxyPoolService {
 
   reportSuccess(id: string): void {
     const p = this.proxies.get(id);
-    if (p) { p.successCount++; p.failCount = 0; p.isHealthy = true; p.qualityScore = Math.min(100, p.qualityScore + 5); }
+    if (p) { 
+      p.successCount++; 
+      p.failCount = 0; 
+      p.isHealthy = true; 
+      p.qualityScore = Math.min(100, p.qualityScore + 5); 
+      this.saveDetailedScores();
+    }
   }
 
   reportFailure(id: string): void {
     const p = this.proxies.get(id);
     if (p) {
-      p.failCount++; p.qualityScore = Math.max(0, p.qualityScore - 15);
+      p.failCount++; 
+      p.qualityScore = Math.max(0, p.qualityScore - 15);
       if (p.failCount >= this.config.maxFailBeforeDisable) {
         p.isHealthy = false;
         this.log.warn(`Proxy disabled: ${p.host}:${p.port} (${p.failCount} fails)`);
       }
+      this.saveDetailedScores();
     }
   }
 
@@ -564,6 +626,7 @@ export class ProxyPoolService {
 
     // Refresh FastLane after health check
     this.refreshFastLane();
+    this.saveDetailedScores();
 
     this.log.info(`Health check: ${healthy}✓ ${unhealthy}✗ ${purged}🗑 / ${proxies.length} total, pool size: ${this.proxies.size}`);
     return { healthy, unhealthy, purged };
