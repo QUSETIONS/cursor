@@ -224,6 +224,7 @@ export class ProxyAcquisitionService {
           enabled: true,
           activeConnections: 0,
           lastUsedAt: 0,
+          qualityScore: 50,
         });
       }
       log.info(`  → Added ${sessions} gateway sessions for ${provider.name}`);
@@ -261,6 +262,7 @@ export class ProxyAcquisitionService {
               enabled: true,
               activeConnections: 0,
               lastUsedAt: 0,
+              qualityScore: 50,
             });
             count++;
           }
@@ -289,6 +291,7 @@ export class ProxyAcquisitionService {
         enabled: true,
         activeConnections: 0,
         lastUsedAt: 0,
+        qualityScore: 100, // WARP nodes are highly trusted
       });
     }
 

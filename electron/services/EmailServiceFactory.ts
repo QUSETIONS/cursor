@@ -415,371 +415,68 @@ class MailTmService implements IEmailService {
   }
 }
 
-// ─── Outlook Web Alias (browser-based email reading) ───
-// Microsoft blocks basic IMAP auth; we read emails via Outlook Web UI instead
-class ImapAliasEmailService implements IEmailService {
+// ─── Direct IMAP Service (Catch-All / Custom Domains) ───
+// Reads directly via IMAP protocol without triggering browser-based MS login blocks.
+// Perfect for Gmail Catch-All integrations.
+class PureImapEmailService implements IEmailService {
   type: EmailServiceType = 'imap';
-  displayName = 'Outlook Web 别名邮箱';
-  private log = createLogger('OutlookWeb');
-  private baseEmail: string;
-  private password: string;
-  private domain: string;
-  private browser: any = null;
-  private mailPage: any = null;
-  private loggedIn = false;
+  displayName = 'Catch-All IMAP 接收器';
+  private log = createLogger('PureImap');
+  private config: EmailServiceConfig;
 
   constructor(config: EmailServiceConfig) {
-    this.baseEmail = config.imapUser || '';
-    this.password = config.imapPass || '';
-    this.domain = this.baseEmail.split('@')[1] || 'outlook.com';
-    this.log.info(`Outlook Web alias service configured: base=${this.baseEmail}`);
+    this.config = config;
+    this.log.info(`Pure IMAP service configured: user=${this.config.imapUser}, host=${this.config.imapHost}`);
   }
 
   async createEmail(prefix?: string): Promise<TempEmail> {
-    const local = this.baseEmail.split('@')[0];
-    const suffix = prefix || `reg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    const aliasEmail = `${local}+${suffix}@${this.domain}`;
-    this.log.info(`Created alias email: ${aliasEmail}`);
+    const catchAllDomain = process.env.CATCH_ALL_DOMAIN || 'nirvana-farm-2026.cyou';
+    const slug = prefix || `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const aliasEmail = `${slug}@${catchAllDomain}`;
+    this.log.info(`Generated Catch-All alias: ${aliasEmail}`);
     return { address: aliasEmail };
   }
 
   async waitForCode(email: string, opts?: WaitOptions): Promise<string | null> {
     const options = { ...DEFAULT_WAIT, ...opts };
-    const start = Date.now();
-
-    this.log.info(`Polling Outlook Web for verification code to ${email}...`);
-
+    this.log.info(`Polling IMAP via ${this.config.imapHost} for code sent to ${email}...`);
+    
     try {
-      // Ensure browser session is ready
-      if (!this.loggedIn) {
-        await this.ensureLogin();
+      const { ImapService } = require('./ImapService');
+      const imapSvc = new ImapService();
+      const accountConfig = {
+         id: 'dynamic-imap',
+         email: this.config.imapUser!,
+         password: this.config.imapPass!,
+         host: this.config.imapHost || 'imap.gmail.com',
+         port: this.config.imapPort || 993,
+         tls: true
+      };
+      
+      const result = await imapSvc.fetchVerificationCode(
+        accountConfig,
+        {
+           senderPatterns: options.senderPatterns || ['cursor', 'workos', 'verify', 'noreply'],
+           codePattern: options.codePattern || /(\d{6})/,
+           targetEmail: email
+        },
+        true // deleteAfterRead
+      );
+      
+      if (result) {
+        this.log.info(`✅ Successfully fetched verification code via IMAP: ${result}`);
+        return result;
       }
-
-      while (Date.now() - start < options.timeoutMs!) {
-        try {
-          const code = await this.searchOutlookWeb(email, options.codePattern!);
-          if (code) {
-            this.log.info(`✅ Got verification code: ${code}`);
-            return code;
-          }
-        } catch (err) {
-          this.log.warn(`Outlook Web poll error: ${err instanceof Error ? err.message : err}`);
-          // Try re-login if session expired
-          if (String(err).includes('closed') || String(err).includes('detach')) {
-            this.loggedIn = false;
-            try { await this.ensureLogin(); } catch { /* ignore */ }
-          }
-        }
-        await this.delay(5000);
-      }
-    } catch (err) {
-      this.log.error(`Outlook Web login failed: ${err instanceof Error ? err.message : err}`);
+    } catch(err) {
+      this.log.error(`IMAP Polling failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    this.log.warn(`Verification code timeout after ${options.timeoutMs! / 1000}s`);
-    return null;
-  }
-
-  private async ensureLogin(): Promise<void> {
-    // Session reuse — if already logged in, verify session is still alive
-    if (this.loggedIn && this.mailPage) {
-      try {
-        const url = this.mailPage.url();
-        if (url.includes('outlook.live.com') || url.includes('mail')) {
-          this.log.info('♻️ Reusing existing Outlook Web session');
-          return;
-        }
-      } catch {
-        // Page closed or crashed — need fresh login
-        this.loggedIn = false;
-      }
-    }
-
-    const puppeteer = require('puppeteer-extra');
-    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-    puppeteer.use(StealthPlugin());
-
-    // Close previous browser if any
-    if (this.browser) {
-      try { await this.browser.close(); } catch { /* ignore */ }
-      this.browser = null;
-      this.mailPage = null;
-    }
-
-    // Retry login up to 2 times
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        this.log.info(`🔑 Logging into Outlook Web... (attempt ${attempt}/2)`);
-        await this._doLogin(puppeteer);
-        this.loggedIn = true;
-        this.log.info('✅ Outlook Web login successful, inbox ready');
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.log.warn(`Login attempt ${attempt} failed: ${msg}`);
-
-        // Screenshot for debugging
-        await this._screenshotOnError(`login_fail_${attempt}`);
-
-        // Close browser for fresh retry
-        if (this.browser) {
-          try { await this.browser.close(); } catch { /* ignore */ }
-          this.browser = null;
-          this.mailPage = null;
-        }
-
-        if (attempt === 2) throw err;
-        await this.delay(3000); // Brief cooldown before retry
-      }
-    }
-  }
-
-  private async _doLogin(puppeteer: any): Promise<void> {
-    // Find Chrome path
-    const fs = require('fs');
-    const chromePaths = [
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-    ];
-    const executablePath = chromePaths.find((p: string) => fs.existsSync(p)) || undefined;
-
-    this.browser = await puppeteer.launch({
-      executablePath,
-      channel: executablePath ? undefined : 'chrome',
-      headless: false,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--window-size=1200,800',
-      ],
-    });
-
-    this.mailPage = await this.browser.newPage();
-    await this.mailPage.setViewport({ width: 1200, height: 800 });
-    // Set a longer default navigation timeout
-    this.mailPage.setDefaultNavigationTimeout(60000);
-
-    // Step 1: Navigate to login page
-    await this.mailPage.goto('https://login.live.com/', {
-      waitUntil: 'networkidle2',
-      timeout: 30000,
-    });
-    await this.delay(1500);
-
-    // Step 2: Enter email
-    await this.mailPage.waitForSelector('input[type="email"], input[name="loginfmt"]', {
-      timeout: 15000,
-      visible: true,
-    });
-    // Clear and type email
-    await this.mailPage.evaluate(() => {
-      const el = document.querySelector('input[type="email"], input[name="loginfmt"]') as HTMLInputElement;
-      if (el) { el.value = ''; el.focus(); }
-    });
-    await this.mailPage.type('input[type="email"], input[name="loginfmt"]', this.baseEmail, { delay: 40 });
-    await this.delay(300);
-
-    // Step 3: Click Next with waitForNavigation
-    // MS login uses <button>, <input>, or dynamic elements — try multiple strategies
-    let nextBtn = await this.mailPage.$('#idSIButton9');
-    if (!nextBtn) nextBtn = await this.mailPage.$('input[type="submit"][value="Next"]');
-    if (!nextBtn) nextBtn = await this.mailPage.$('button[type="submit"]');
-    if (!nextBtn) {
-      // XPath fallback: find button containing text 'Next'
-      const [xpathBtn] = await this.mailPage.$$('::-p-xpath(//button[contains(text(), "Next")] | //input[@value="Next"])');
-      nextBtn = xpathBtn || null;
-    }
-    if (!nextBtn) throw new Error('Next button not found');
-
-    await Promise.all([
-      this.mailPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {}),
-      nextBtn.click(),
-    ]);
-    // Extra wait for animation to finish on password page
-    await this.delay(2000);
-
-    // Step 4: Detect page state via URL and content
-    const currentUrl = this.mailPage.url();
-    this.log.info(`🔍 Post-email URL: ${currentUrl}`);
-
-    // Check for "Verify your email" challenge and click "Other ways to sign in" if present
-    try {
-      const bodyTextPre = await this.mailPage.evaluate(() => document.body?.innerText || '');
-      // Some MS pages use id="idA_PWD_SwitchToPassword" or "Other ways to sign in" 
-      if (bodyTextPre.includes('Other ways to sign in') || bodyTextPre.includes('Verify your email') || bodyTextPre.includes('password instead')) {
-        this.log.info(`⚠️ Microsoft verification challenge detected. Attempting to bypass via "Other ways to sign in" or "Use my password"...`);
-        
-        let [otherWaysBtn] = await this.mailPage.$$('::-p-xpath(//a[contains(text(), "Other ways to sign in")] | //button[contains(text(), "Other ways to sign in")] | //div[contains(text(), "Other ways to sign in")] | //*[@id="signInAnotherWay"])');
-        if (otherWaysBtn) {
-          await (otherWaysBtn as any).click();
-          await this.delay(1000);
-        }
-        
-        // Wait for "Use my password" or similar option
-        let [usePasswordBtn] = await this.mailPage.$$('::-p-xpath(//div[contains(translate(text(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "password")] | //a[contains(translate(text(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "password")] | //button[contains(translate(text(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "password")] | //*[@id="idA_PWD_SwitchToPassword"])');
-        if (usePasswordBtn) {
-           this.log.info(`🔓 Clicking "Use my password" option...`);
-           await (usePasswordBtn as any).click();
-           await this.mailPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-           await this.delay(1000);
-        } else {
-           this.log.debug(`⚠️ "Use my password" option not explicitly found, continuing to password check...`);
-        }
-      }
-    } catch (err) {
-      this.log.warn(`⚠️ Error checking for 'Other ways to sign in': ${err}`);
-    }
-
-    // Step 5: Wait for password field with multiple strategies
-    let pwInput = null;
-    const pwSelectors = [
-      'input[type="password"]',
-      'input[name="passwd"]',
-      '#i0118',  // Microsoft's password field ID
-    ];
-
-    for (const sel of pwSelectors) {
-      try {
-        pwInput = await this.mailPage.waitForSelector(sel, { timeout: 10000, visible: true });
-        if (pwInput) {
-          this.log.info(`🔑 Password field found: ${sel}`);
-          break;
-        }
-      } catch { /* try next selector */ }
-    }
-
-    if (!pwInput) {
-      // Check if we hit a CAPTCHA, error, or different flow
-      const bodyText = await this.mailPage.evaluate(() => document.body?.innerText || '');
-      if (/captcha|robot|challenge|unusual/i.test(bodyText)) {
-        throw new Error('Microsoft login CAPTCHA detected — manual intervention needed');
-      }
-      if (/doesn.*exist|no.*account|error/i.test(bodyText)) {
-        throw new Error('Microsoft account not found or login error');
-      }
-      throw new Error('Password field not found after all strategies');
-    }
-
-    // Step 6: Enter password
-    await pwInput.click({ clickCount: 3 });
-    await this.delay(200);
-    await pwInput.type(this.password, { delay: 25 });
-    await this.delay(300);
-
-    // Step 7: Click Sign In with waitForNavigation
-    let signInBtn = await this.mailPage.$('#idSIButton9');
-    if (!signInBtn) signInBtn = await this.mailPage.$('input[type="submit"]');
-    if (!signInBtn) signInBtn = await this.mailPage.$('button[type="submit"]');
-    if (!signInBtn) {
-      const [xpathBtn] = await this.mailPage.$$('::-p-xpath(//button[contains(text(), "Sign in")] | //input[@value="Sign in"])');
-      signInBtn = xpathBtn || null;
-    }
-    if (!signInBtn) throw new Error('Sign In button not found');
-
-    await Promise.all([
-      this.mailPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }).catch(() => {}),
-      signInBtn.click(),
-    ]);
-    await this.delay(2000);
-
-    // Step 8: Handle post-login pages
-    const postLoginUrl = this.mailPage.url();
-    this.log.info(`🔍 Post-signin URL: ${postLoginUrl}`);
-
-    // Handle "Stay signed in?" prompt
-    try {
-      const stayBtn = await this.mailPage.$('#idSIButton9, #idBtn_Back, #acceptButton');
-      if (stayBtn) {
-        await Promise.all([
-          this.mailPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {}),
-          stayBtn.click(),
-        ]);
-        await this.delay(1500);
-      }
-    } catch { /* no stay-signed-in prompt */ }
-
-    // Check for 2FA or additional verification
-    const post2faUrl = this.mailPage.url();
-    if (/proofs|additional.*security|identity/i.test(post2faUrl)) {
-      throw new Error('2FA/additional verification required — manual intervention needed');
-    }
-
-    // Step 9: Navigate to inbox
-    await this.mailPage.goto('https://outlook.live.com/mail/0/inbox', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
-    await this.delay(3000);
-  }
-
-  private async _screenshotOnError(name: string): Promise<void> {
-    if (!this.mailPage) return;
-    try {
-      const path = require('path');
-      const os = require('os');
-      const screenshotPath = path.join(os.tmpdir(), `nirvana_${name}_${Date.now()}.png`);
-      await this.mailPage.screenshot({ path: screenshotPath, fullPage: true });
-      this.log.info(`📸 Debug screenshot: ${screenshotPath}`);
-    } catch { /* ignore screenshot failures */ }
-  }
-
-  private async searchOutlookWeb(targetEmail: string, codePattern: RegExp): Promise<string | null> {
-    if (!this.mailPage) return null;
-
-    try {
-      // Reload inbox to get latest emails
-      await this.mailPage.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-      await this.delay(3000);
-
-      // Get all visible text content from the inbox page
-      const pageText: string = await this.mailPage.evaluate(() => {
-        return document.body?.innerText || '';
-      });
-
-      // Look for Cursor/WorkOS related content
-      if (/cursor|workos|verification|verify|code/i.test(pageText)) {
-        // Try to match code directly from inbox preview text
-        const match = pageText.match(codePattern);
-        if (match && match[1]) {
-          return match[1];
-        }
-
-        // Try clicking on email items to read full body
-        const emailItems = await this.mailPage.$$('[role="option"], [data-convid], [aria-label*="cursor" i], [aria-label*="verify" i]');
-        for (const item of emailItems.slice(0, 5)) {
-          try {
-            const itemText: string = await this.mailPage.evaluate((el: any) => el.innerText || '', item);
-            if (/cursor|workos|verification|verify|code/i.test(itemText)) {
-              await item.click();
-              await this.delay(2000);
-
-              const bodyText: string = await this.mailPage.evaluate(() => {
-                return document.body?.innerText || '';
-              });
-              const bodyMatch = bodyText.match(codePattern);
-              if (bodyMatch && bodyMatch[1]) {
-                return bodyMatch[1];
-              }
-            }
-          } catch { /* skip item */ }
-        }
-      }
-    } catch (err) {
-      this.log.warn(`Outlook Web search error: ${err instanceof Error ? err.message : err}`);
-    }
-
+    this.log.warn(`IMAP verification code timeout after ${options.timeoutMs! / 1000}s`);
     return null;
   }
 
   async cleanup(): Promise<void> {
-    if (this.browser) {
-      try { await this.browser.close(); } catch { /* ignore */ }
-      this.browser = null;
-      this.mailPage = null;
-      this.loggedIn = false;
-    }
+    // No browser to close in pure IMAP polling
   }
 
   private delay(ms: number): Promise<void> {
@@ -816,7 +513,7 @@ export function createEmailService(config: EmailServiceConfig): IEmailService {
       if (!config.imapUser || !config.imapPass) {
         throw new Error('IMAP alias requires imapUser (email) and imapPass (password/app-password)');
       }
-      return new ImapAliasEmailService(config);
+      return new PureImapEmailService(config);
     default:
       throw new Error(`Unknown email service type: ${config.type}`);
   }
