@@ -36,7 +36,32 @@ import {
   WindsurfExtractTokenStep,
 } from './steps/WindsurfSteps';
 
-export type Platform = 'cursor' | 'kiro' | 'windsurf';
+import {
+  OpenAINavigateStep,
+  OpenAIFillCredentialsStep,
+  OpenAIArkoseBypassStep,
+  OpenAIPhoneVerificationStep,
+  OpenAIExtractSessionStep,
+} from './steps/OpenAISteps';
+
+// Claude Steps
+import {
+  ClaudeNavigateStep,
+  ClaudeFillEmailStep,
+  ClaudePhoneVerificationStep,
+  ClaudeExtractSessionStep,
+} from './steps/ClaudeSteps';
+
+// Antigravity (Google) Steps
+import {
+  AntigravityNavigateSignupStep,
+  AntigravityFillDetailsStep,
+  AntigravitySelectEmailStep,
+  AntigravityPhoneVerificationStep,
+  AntigravityOAuthConsentStep,
+} from './steps/AntigravitySteps';
+
+export type Platform = 'cursor' | 'kiro' | 'windsurf' | 'openai' | 'claude' | 'antigravity';
 
 export function createPipelineSteps(platform: Platform): RegistrationStep[] {
   switch (platform) {
@@ -71,6 +96,32 @@ export function createPipelineSteps(platform: Platform): RegistrationStep[] {
         new WindsurfExtractTokenStep(),
       ];
 
+    case 'openai':
+      return [
+        new OpenAINavigateStep(),
+        new OpenAIFillCredentialsStep(),
+        new OpenAIArkoseBypassStep(),
+        new OpenAIPhoneVerificationStep(),
+        new OpenAIExtractSessionStep(),
+      ];
+
+    case 'claude':
+      return [
+        new ClaudeNavigateStep(),
+        new ClaudeFillEmailStep(),
+        new ClaudePhoneVerificationStep(),
+        new ClaudeExtractSessionStep()
+      ];
+
+    case 'antigravity':
+      return [
+        new AntigravityNavigateSignupStep(),
+        new AntigravityFillDetailsStep(),
+        new AntigravitySelectEmailStep(),
+        new AntigravityPhoneVerificationStep(),
+        new AntigravityOAuthConsentStep()
+      ];
+
     default:
       throw new Error(`Unknown platform: ${platform}`);
   }
@@ -81,4 +132,8 @@ export const PlatformMeta: Record<Platform, { label: string; emoji: string; colo
   cursor: { label: 'Cursor', emoji: '🖥️', color: '#8b5cf6' },
   kiro: { label: 'Kiro', emoji: '🎯', color: '#f97316' },
   windsurf: { label: 'Windsurf', emoji: '🏄', color: '#0ea5e9' },
+  openai: { label: 'OpenAI', emoji: '🤖', color: '#10a37f' },
+  claude: { label: 'Claude', emoji: '🧠', color: '#d97757' },
+  antigravity: { label: 'Antigravity', emoji: '🛸', color: '#4285F4' },
 };
+

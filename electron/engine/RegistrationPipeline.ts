@@ -35,6 +35,7 @@ export interface RegistrationParams {
   timeout: number;
   captchaConfig?: any;
   concurrency?: number;
+  retryLimit?: number;
   catchAllConfig?: {
     enabled: boolean;
     domain: string;
@@ -131,7 +132,7 @@ export class RegistrationPipeline {
     try {
       this.scheduler = new ConcurrentScheduler({
         maxConcurrent: params.concurrency || 1,
-        retryLimit: 0,
+        retryLimit: params.retryLimit ?? 3,
         delayBetweenTasksMs: params.interval * 1000,
         delayJitterMs: 1000,
       });
@@ -140,6 +141,10 @@ export class RegistrationPipeline {
         if (event === 'started') this.logger.info(`[${task.email}] 开始执行. (运行中: ${stats.running})`);
         if (event === 'success') this.logger.info(`[${task.email}] 注册成功!`);
         if (event === 'failed') this.logger.warn(`[${task.email}] 注册失败: ${task.error}`);
+        if (event === 'retry') {
+          this.logger.warn(`[${task.email}] 执行失败，正在进行第 ${task.retryCount}/${params.retryLimit ?? 3} 次重试 (切换新代理)...`);
+          this.progress.setStep(task.email, `🔄 重试 (${task.retryCount}/${params.retryLimit ?? 3})`, 0);
+        }
       });
 
       this.scheduler.setHandler(async (task) => {
@@ -153,8 +158,9 @@ export class RegistrationPipeline {
         
         let proxyUrl: string | undefined;
         let proxyEntry: ProxyEntry | null = null;
+        const taskId = `task-${email}`;
         if (params.ipConfig?.strategy === 'proxy') {
-          proxyEntry = proxyPool.getStrictRoute();
+          proxyEntry = proxyPool.leaseProxy(taskId);
           if (proxyEntry) {
             const auth = proxyEntry.username ? `${proxyEntry.username}:${proxyEntry.password || ''}@` : '';
             proxyUrl = `${proxyEntry.protocol}://${auth}${proxyEntry.host}:${proxyEntry.port}`;
@@ -167,7 +173,7 @@ export class RegistrationPipeline {
         const result = await this.registerSingleAccount(email, params, steps, proxyUrl);
         
         if (proxyEntry) {
-          proxyPool.releaseRoute(proxyEntry.id);
+          proxyPool.releaseProxy(taskId, result.success, result.error);
         }
 
         this.results.push(result);
