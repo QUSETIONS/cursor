@@ -130,7 +130,97 @@ export function RegistrationPage() {
       <div className="two-column">
         {/* Left: Config Panels */}
         <div className="column-left">
-          {/* Email list */}
+          {/* ── Catch-All 模式切换 ── */}
+          <div className="card">
+            <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => store.setCatchAllConfig({ enabled: !store.catchAllConfig.enabled })}>
+              <span className="card-title">🌐 Catch-All 无限邮箱模式</span>
+              <button
+                className={`toggle ${store.catchAllConfig.enabled ? 'active' : 'inactive'}`}
+                onClick={(e) => { e.stopPropagation(); store.setCatchAllConfig({ enabled: !store.catchAllConfig.enabled }); }}
+              >
+                <span className="toggle-dot" />
+              </button>
+            </div>
+            {store.catchAllConfig.enabled && (
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="alert" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 8, padding: '8px 12px', fontSize: 11, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                  💡 绑定一个廉价域名（$1/年），所有 <code>随机前缀@你的域名</code> 的邮件将统一转发到下方配置的 IMAP 邮箱。
+                </div>
+                <div className="form-group">
+                  <label className="label">Catch-All 域名</label>
+                  <input
+                    className="input"
+                    type="text"
+                    value={store.catchAllConfig.domain}
+                    onChange={(e) => store.setCatchAllConfig({ domain: e.target.value })}
+                    placeholder="例如: nirvana-reg.icu"
+                    disabled={store.isRunning}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="label">批量注册数量</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={store.catchAllConfig.targetCount}
+                    onChange={(e) => store.setCatchAllConfig({ targetCount: parseInt(e.target.value) || 10 })}
+                    disabled={store.isRunning}
+                  />
+                </div>
+                <div style={{ border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    📬 统一收件箱 (IMAP)
+                  </div>
+                  <input
+                    className="input"
+                    type="text"
+                    value={store.catchAllConfig.imapHost}
+                    onChange={(e) => store.setCatchAllConfig({ imapHost: e.target.value })}
+                    placeholder="IMAP 主机 (如 imap-mail.outlook.com)"
+                    disabled={store.isRunning}
+                    style={{ marginBottom: 6 }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                    <input
+                      className="input"
+                      type="text"
+                      value={store.catchAllConfig.imapUser}
+                      onChange={(e) => store.setCatchAllConfig({ imapUser: e.target.value })}
+                      placeholder="IMAP 用户 (你的真实邮箱)"
+                      disabled={store.isRunning}
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      className="input"
+                      type="number"
+                      value={store.catchAllConfig.imapPort}
+                      onChange={(e) => store.setCatchAllConfig({ imapPort: parseInt(e.target.value) || 993 })}
+                      disabled={store.isRunning}
+                      style={{ width: 70 }}
+                    />
+                  </div>
+                  <input
+                    className="input"
+                    type="password"
+                    value={store.catchAllConfig.imapPass}
+                    onChange={(e) => store.setCatchAllConfig({ imapPass: e.target.value })}
+                    placeholder="IMAP 密码/应用专用密码"
+                    disabled={store.isRunning}
+                  />
+                </div>
+                {store.catchAllConfig.domain && (
+                  <div style={{ fontSize: 11, color: 'var(--accent)', padding: '6px 10px', background: 'rgba(168, 85, 247, 0.08)', borderRadius: 6 }}>
+                    🎯 将生成 {store.catchAllConfig.targetCount} 个 <code style={{ fontFamily: 'monospace' }}>xxxxxxxx@{store.catchAllConfig.domain}</code> 随机邮箱
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Email list (hidden when Catch-All enabled) */}
+          {!store.catchAllConfig.enabled && (
           <div className="card">
             <div className="card-header" onClick={() => toggleSection('emails')}>
               <span className="card-title">📋 待注册邮箱列表</span>
@@ -179,8 +269,10 @@ export function RegistrationPage() {
               </div>
             )}
           </div>
+          )}
 
-          {/* IMAP Accounts */}
+          {/* IMAP Accounts (hidden when Catch-All enabled) */}
+          {!store.catchAllConfig.enabled && (
           <div className="card">
             <div className="card-header" onClick={() => toggleSection('imap')}>
               <span className="card-title">📧 IMAP 接收邮箱 <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(用于接收验证码)</span></span>
@@ -265,6 +357,7 @@ export function RegistrationPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Settings */}
           <div className="card">

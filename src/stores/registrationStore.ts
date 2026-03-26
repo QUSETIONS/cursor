@@ -193,11 +193,11 @@ export const useRegistrationStore = create<RegistrationStore>((set, get) => ({
   // ── Catch-All ──
   catchAllConfig: {
     enabled: false,
-    domain: '',
-    imapHost: '',
+    domain: 'nirvana-farm-2026.cyou',
+    imapHost: 'imap.gmail.com',
     imapPort: 993,
-    imapUser: '',
-    imapPass: '',
+    imapUser: process.env.IMAP_USER || '',
+    imapPass: process.env.IMAP_PASS || '',
     imapTls: true,
     targetCount: 10,
   },

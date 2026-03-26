@@ -8,8 +8,10 @@ import { AccountPoolPage } from './pages/AccountPoolPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { SwitchAccountPage } from './pages/SwitchAccountPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { DashboardPage } from './pages/DashboardPage';
 
 type Route =
+  | 'dashboard'
   | 'cursor-register'
   | 'kiro-register'
   | 'windsurf-register'
@@ -25,6 +27,12 @@ interface NavSection {
 }
 
 const NAV: NavSection[] = [
+  {
+    label: '中枢神经',
+    items: [
+      { id: 'dashboard', label: '总控台', emoji: '⚔️', color: '#10b981' }
+    ],
+  },
   {
     label: '批量注册',
     items: [
@@ -51,7 +59,7 @@ const NAV: NavSection[] = [
 ];
 
 export default function App() {
-  const [route, setRoute] = useState<Route>('cursor-register');
+  const [route, setRoute] = useState<Route>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -160,6 +168,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="main-content" style={{ flex: 1, overflow: 'auto' }}>
+          {route === 'dashboard' && <DashboardPage />}
           {route === 'cursor-register' && <RegistrationPage />}
           {route === 'kiro-register' && <KiroRegisterPage />}
           {route === 'windsurf-register' && <WindsurfRegisterPage />}
