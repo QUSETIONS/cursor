@@ -14,12 +14,14 @@ import { IPSwitchService } from './services/IPSwitchService';
 import { RegistrationPipeline } from './engine/RegistrationPipeline';
 import { AccountPoolService } from './services/AccountPoolService';
 import { ProxyPoolService, ProxiflyCDNSource, PublicPoolSource, ProxyTunnelGateway } from './services/ProxyPoolService';
+import { StorageService } from './services/StorageService';
 import { CursorSwitchService } from './services/CursorSwitchService';
 import { TokenRefreshService } from './services/TokenRefreshService';
 import { ApiGateway } from './services/ApiGateway';
 import { WatchdogService } from './services/WatchdogService';
 import { OutlookService } from './services/OutlookService';
-import { Logger } from './utils/Logger';
+import { Logger, logEmitter } from './utils/Logger';
+import { startSolverServer } from './services/solver/SolverServer';
 
 const logger = Logger.create('Main');
 
@@ -61,7 +63,7 @@ process.on('SIGINT', () => {
 });
 
 // ─── Global state ───
-let mainWindow: BrowserWindow | null = null;
+let mainWindow: any = null;
 let globalProxyConfig: any = null;
 
 async function applyGlobalProxy(proxy: any) {
@@ -76,7 +78,7 @@ async function applyGlobalProxy(proxy: any) {
   logger.info(`Global Proxy enabled: ${rules}`);
 }
 
-app.on('login', (event, webContents, request, authInfo, callback) => {
+app.on('login', (event: any, webContents: any, request: any, authInfo: any, callback: any) => {
   if (authInfo.isProxy && globalProxyConfig && globalProxyConfig.user && globalProxyConfig.pass) {
     event.preventDefault();
     callback(globalProxyConfig.user, globalProxyConfig.pass);
@@ -113,26 +115,26 @@ try {
   logger.warn('Could not pre-load verified proxies:', e);
 }
 
-// ─── Cloudflare WARP Matrix (Docker) ───
-// 10 WARP SOCKS5 nodes on ports 9001-9010, each with a unique Cloudflare IP
-// ★ Each node automatically gets a unique IPv6 address from Cloudflare's network
-const WARP_NODE_COUNT = 10;
-const WARP_BASE_PORT = 9001;
-for (let i = 0; i < WARP_NODE_COUNT; i++) {
-  const port = WARP_BASE_PORT + i;
+// ─── Local System Proxy Integration (Mihomo / Clash / v2ray) ───
+// Chinese users invariably run local subscription routers. We hook into them directly.
+// This completely bypasses the ERR_PROXY_CONNECTION_FAILED from dead free nodes.
+const systemPorts = [7897, 7890, 10808, 1080, 10809];
+for (const port of systemPorts) {
   proxyPool.addProxy({
-    protocol: 'socks5',
+    protocol: port === 7897 ? 'http' : 'socks5', // HTTP works universally
     host: '127.0.0.1',
     port,
-    provider: 'CloudflareWARP',
-    country: 'auto',
+    provider: 'Local Router (Mihomo/Clash)',
+    country: 'local',
     enabled: true,
     activeConnections: 0,
     lastUsedAt: 0,
-    ipv6Capable: true,  // WARP routes through Cloudflare's IPv6 network
+    ipv6Capable: true,
+    qualityScore: 100, // Top priority
+    source: 'local-mihomo',
   });
 }
-logger.info(`Registered ${WARP_NODE_COUNT} Cloudflare WARP SOCKS5 proxies (IPv6-capable, ports ${WARP_BASE_PORT}-${WARP_BASE_PORT + WARP_NODE_COUNT - 1})`);
+logger.info(`Injected local premium routing proxies (Clash/Mihomo) on ports: ${systemPorts.join(', ')}`);
 const cursorSwitch = new CursorSwitchService();
 const tokenService = new TokenRefreshService();
 const apiGateway = new ApiGateway(tokenService);
@@ -142,13 +144,13 @@ const watchdog = new WatchdogService(accountPool, proxyPool, {
   alertWebhookUrl: process.env.WATCHDOG_WEBHOOK_URL,
 });
 
-// Use Outlook IMAP Alias for reliable verification code retrieval
+// Use Catch-All IMAP for reliable verification code retrieval
 const emailService = createEmailService({
   type: 'imap',
-  imapUser: 'WandaBrown8051@outlook.com',
-  imapPass: 'scfqujf2914',
-  imapHost: 'imap-mail.outlook.com',
-  imapPort: 993,
+  imapUser: process.env.IMAP_USER || '',
+  imapPass: process.env.IMAP_PASS || '',
+  imapHost: process.env.IMAP_HOST || 'imap.gmail.com',
+  imapPort: Number(process.env.IMAP_PORT) || 993,
 });
 const registrationPipeline = new RegistrationPipeline(browserService, ipService, emailService);
 const outlookService = new OutlookService(browserService);
@@ -224,6 +226,75 @@ function registerIpcHandlers(): void {
   ipcBus.handle(Channels.STORAGE_DELETE, async (_e, key: unknown) => {
     await secureStorage.delete(String(key));
     return true;
+  });
+
+  // ── Engine Dashboard (Foundry / Ghost Fleet) ──
+  let isFoundryRunning = false;
+  ipcBus.handle(Channels.ENGINE_FOUNDRY_START, async () => {
+    if (isFoundryRunning) return { success: true, message: 'Already running' };
+    try {
+      // In a real production app we'd spawn a child process to avoid blocking the main event loop,
+      // but the Express server is very lightweight.
+      startSolverServer();
+      isFoundryRunning = true;
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcBus.handle(Channels.ENGINE_FOUNDRY_STATUS, async () => {
+    return { running: isFoundryRunning, port: 8191 };
+  });
+
+  let isGhostFleetRunning = true; // Started by default in main.ts
+  ipcBus.handle(Channels.ENGINE_GHOSTFLEET_START, async () => {
+    if (isGhostFleetRunning) return { success: true };
+    try {
+       proxyPool.start();
+       await proxyTunnel.start();
+       isGhostFleetRunning = true;
+       return { success: true };
+    } catch (e: any) {
+       return { success: false, error: e.message };
+    }
+  });
+
+  ipcBus.handle(Channels.ENGINE_GHOSTFLEET_STOP, async () => {
+    proxyPool.stop();
+    await proxyTunnel.stop();
+    isGhostFleetRunning = false;
+    return { success: true };
+  });
+
+  ipcBus.handle(Channels.ENGINE_GHOSTFLEET_STATUS, async () => {
+    const stats = proxyPool.getStats ? proxyPool.getStats() : { total: proxyPool.listProxies().length, fastLaneCount: 0 };
+    return {
+      running: isGhostFleetRunning,
+      port: 10801, // ProxyTunnel Gateway Port
+      totalProxies: stats.total,
+      fastLaneCount: stats.fastLaneCount
+    };
+  });
+
+  // ── TG4: Ghost Fleet Metrics & Gatling Gun History ──
+  ipcBus.handle('get-proxy-stats', async () => {
+    const all = proxyPool.listProxies();
+    const healthy = all.filter(p => p.isHealthy && p.enabled);
+    return {
+      total: all.length,
+      healthy: healthy.length,
+      topNodes: healthy.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 5)
+    };
+  });
+
+  ipcBus.handle('get-recent-accounts', async () => {
+    return StorageService.getAllAccounts().slice(-10);
+  });
+
+  // Connect global unified logging to frontend terminal
+  logEmitter.on('log', (msg) => {
+    mainWindow?.webContents.send(Channels.ENGINE_GLOBAL_LOG, msg);
   });
 
   // ── IMAP ──
@@ -459,47 +530,40 @@ app.whenReady().then(async () => {
 
   // Register IPC handlers
   registerIpcHandlers();
-
+  
   // Create main window
   createWindow();
 
-  // ─── AUTO REGISTRATION: 7 accounts via IPv6 WARP (remove after run) ───
+  // ─── AI AUTO-TEST INJECTION ───
   setTimeout(async () => {
-    logger.info('═══ IPv6 WARP REGISTRATION: Starting batch of 3 accounts (IMAP Alias) ═══');
+    logger.info('🤖 [AI Test] Auto-triggering Gatling Gun on 1 account via Catch-All IMAP & Local Proxy (7897)...');
     try {
-      const emails: string[] = [];
-      for (let i = 0; i < 3; i++) {
-        try {
-          const temp = await emailService.createEmail();
-          emails.push(temp.address);
-          logger.info(`  📧 [${i + 1}/3] ${temp.address}`);
-        } catch (e) {
-          logger.error(`  ❌ Email ${i + 1} creation failed:`, e);
-        }
-        // No delay needed for alias generation
-      }
-      if (emails.length === 0) { logger.error('❌ No emails created'); return; }
-      logger.info(`  ✅ ${emails.length} emails ready, launching pipeline with IPv6 WARP + IMAP...`);
-
+      const prefix = Math.random().toString(36).substring(2, 10);
+      const catchAllDomain = process.env.CATCH_ALL_DOMAIN || 'nirvana-farm-2026.cyou';
+      const tempEmail = `${prefix}@${catchAllDomain}`;
+      logger.info(`🤖 [AI Test] Generated Catch-All target: ${tempEmail}`);
+      
       const results = await registrationPipeline.execute({
         platform: 'cursor' as any,
-        emails,
+        emails: [tempEmail],
         imapAccounts: [],
-        browserConfig: { type: 'local' as const, headless: false },
-        ipConfig: { enabled: true, strategy: 'proxy' as const },
+        browserConfig: { type: 'local' as const, headless: true },
+        ipConfig: { strategy: 'proxy' as const },
         savePath: path.join(app.getPath('userData'), 'auto_accounts'),
-        interval: 5,
+        interval: 1,
         deleteMailAfterRead: true,
         fetchTokenAfterRegister: true,
         timeout: 120000,
-        concurrency: 1  // Sequential for max stability with IMAP
+        concurrency: 1,
+        retryLimit: 3
       });
-      const ok = results.filter((r: any) => r.success).length;
-      const fail = results.filter((r: any) => !r.success).length;
-      logger.info(`═══ DONE: ${ok} success, ${fail} failed ═══`);
-      logger.info(JSON.stringify(results, null, 2));
-    } catch (e) { logger.error('Registration error:', e); }
-  }, 20000);
+      logger.info('🤖 [AI Test] Finished! Results: ' + JSON.stringify(results, null, 2));
+      setTimeout(() => app.quit(), 5000);
+    } catch (err) {
+      logger.error('🤖 [AI Test] Failed:', err);
+      setTimeout(() => app.quit(), 5000);
+    }
+  }, 5000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

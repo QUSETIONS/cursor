@@ -3,6 +3,21 @@
  * Both main and renderer processes import from here.
  */
 export const Channels = {
+  // ─── Control Center (Dashboard) ───
+  ENGINE_FOUNDRY_START: 'engine:foundry:start',
+  ENGINE_FOUNDRY_STOP: 'engine:foundry:stop',
+  ENGINE_FOUNDRY_STATUS: 'engine:foundry:status',
+
+  ENGINE_GHOSTFLEET_START: 'engine:ghostfleet:start',
+  ENGINE_GHOSTFLEET_STOP: 'engine:ghostfleet:stop',
+  ENGINE_GHOSTFLEET_STATUS: 'engine:ghostfleet:status',
+
+  ENGINE_GATLING_START: 'engine:gatling:start',
+  ENGINE_GATLING_STOP: 'engine:gatling:stop',
+  ENGINE_GATLING_PROGRESS: 'engine:gatling:progress',
+
+  ENGINE_GLOBAL_LOG: 'engine:global:log',
+
   // ─── Registration Engine (Generic + Cursor) ───
   REGISTER_START: 'register:start',
   REGISTER_AUTO: 'register:auto',

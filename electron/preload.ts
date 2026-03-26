@@ -13,6 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
   once: (channel: string, callback: (...args: unknown[]) => void) => {
-    ipcRenderer.once(channel, (_event, ...args) => callback(...args));
+    ipcRenderer.once(channel, (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args));
   },
 });

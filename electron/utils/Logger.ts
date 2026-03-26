@@ -2,6 +2,10 @@
  * Structured logger with levels and scoped names.
  * In production, writes to electron-log. In dev, uses console.
  */
+import { EventEmitter } from 'events';
+
+export const logEmitter = new EventEmitter();
+
 export class Logger {
   private constructor(private scope: string) {}
 
@@ -11,7 +15,9 @@ export class Logger {
 
   private format(level: string, message: string): string {
     const ts = new Date().toISOString().substring(11, 23);
-    return `[${ts}] [${level}] [${this.scope}] ${message}`;
+    const out = `[${ts}] [${level}] [${this.scope}] ${message}`;
+    logEmitter.emit('log', out);
+    return out;
   }
 
   /**
