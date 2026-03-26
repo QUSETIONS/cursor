@@ -9,6 +9,7 @@ release/
 # Environment & secrets
 .env
 .env.*
+!.env.example
 
 # Binary proxy tools (download separately)
 warp-plus-bin/
